@@ -14,9 +14,11 @@ const logger = require("./logger");
 dotenv.config();
 connectDB();
 
-// Cấu hình allowedOrigins với log chi tiết
+// Cấu hình allowedOrigins với loại bỏ / thừa
 const allowedOrigins = process.env.CLIENT_URL
-    ? process.env.CLIENT_URL.split(",").map((origin) => origin.trim())
+    ? process.env.CLIENT_URL
+        .split(",")
+        .map((origin) => origin.trim().replace(/\/+$/, "")) // Loại bỏ / ở cuối
     : ["https://tht-store.vercel.app"];
 // Thêm kiểm tra cứng để đảm bảo origin chính xác
 if (!allowedOrigins.includes("https://tht-store.vercel.app")) {
