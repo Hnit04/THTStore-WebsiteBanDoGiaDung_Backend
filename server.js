@@ -14,20 +14,43 @@ const logger = require("./logger");
 dotenv.config();
 connectDB();
 
-const allowedOrigins = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(",") : ["https://tht-store.vercel.app"];
+// Cấu hình allowedOrigins với trim để loại bỏ khoảng trắng
+const allowedOrigins = process.env.CLIENT_URL
+    ? process.env.CLIENT_URL.split(",").map((origin) => origin.trim())
+    : ["https://tht-store.vercel.app"];
+
+// Cấu hình CORS chi tiết
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      logger.warn(`CORS blocked for origin: ${origin}`);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+  optionsSuccessStatus: 200, // Đảm bảo phản hồi preflight trả về 200
+};
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
+  cors: corsOptions, // Sử dụng cùng corsOptions cho Socket.IO
 });
 
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+// Áp dụng CORS middleware
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // Xử lý preflight cho tất cả route
 app.use(express.json());
+
+// Log để debug yêu cầu
+app.use((req, res, next) => {
+  logger.info(`Received request: ${req.method} ${req.url} from origin: ${req.headers.origin}`);
+  next();
+});
 
 const transactionSchema = new mongoose.Schema({
   transactionId: String,
@@ -104,7 +127,6 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
     });
 
     logger.info(`Gọi API SEPay thành công: ${SEPAY_API_URL}/transactions/create`, { transaction_id });
-    console.log("SEPay API response:", JSON.stringify(response.data, null, 2));
 
     if (!response.data.success) {
       throw new Error(response.data.message || "Lỗi không xác định từ SEPay");
@@ -254,6 +276,7 @@ app.get("/api/sepay/check-connection", async (req, res) => {
   }
 });
 
+// Middleware xử lý lỗi
 app.use((err, req, res, next) => {
   logger.error("Lỗi server", { error: err.stack });
   res.status(500).json({

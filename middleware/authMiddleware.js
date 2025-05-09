@@ -13,8 +13,13 @@ exports.protect = async (req, res, next) => {
     token = req.cookies.token;
   }
 
-  // Make sure token exists
+  // Log để debug
   if (!token) {
+    console.log("No token provided", {
+      method: req.method,
+      url: req.url,
+      headers: req.headers,
+    });
     return res.status(401).json({
       success: false,
       error: "Không có quyền truy cập vào tài nguyên này",
@@ -24,11 +29,22 @@ exports.protect = async (req, res, next) => {
   try {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
     req.user = await User.findById(decoded.id);
+
+    if (!req.user) {
+      console.log("User not found for token", { token });
+      return res.status(401).json({
+        success: false,
+        error: "Không có quyền truy cập vào tài nguyên này",
+      });
+    }
 
     next();
   } catch (err) {
+    console.log("Token verification failed", {
+      error: err.message,
+      token,
+    });
     return res.status(401).json({
       success: false,
       error: "Không có quyền truy cập vào tài nguyên này",
@@ -40,6 +56,10 @@ exports.protect = async (req, res, next) => {
 exports.authorize = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
+      console.log("Role not authorized", {
+        userRole: req.user.role,
+        requiredRoles: roles,
+      });
       return res.status(403).json({
         success: false,
         error: `Vai trò ${req.user.role} không có quyền truy cập vào tài nguyên này`,
