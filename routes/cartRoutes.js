@@ -1,4 +1,3 @@
-// server/routes/cartRoutes.js
 const express = require('express');
 const {
   getCart,
@@ -11,16 +10,12 @@ const router = express.Router();
 
 const { protect } = require('../middleware/authMiddleware');
 
-// Lấy giỏ hàng của người dùng hiện tại
 router.get('/', protect, getCart);
 
-// Thêm sản phẩm vào giỏ hàng
 router.post('/', protect, addToCart);
 
-// Cập nhật số lượng sản phẩm trong giỏ hàng
-router.put('/:itemId', protect, updateCartItem);
+router.put('/:_id', protect, updateCartItem);
 
-// Xóa sản phẩm khỏi giỏ hàng
-router.delete('/:itemId', protect, removeFromCart);
+router.delete('/:_id', protect, removeFromCart);
 
 module.exports = router;

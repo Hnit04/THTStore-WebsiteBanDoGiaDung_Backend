@@ -1,6 +1,14 @@
-const mongoose = require("mongoose")
+const mongoose = require("mongoose");
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('Connected to MongoDB Atlas!'))
+  .catch(err => console.error('Connection error:', err));
 
 const ProductSchema = new mongoose.Schema({
+  id: {
+    type: String,
+    required: false,
+    unique: true,
+  },
   name: {
     type: String,
     required: [true, "Vui lòng nhập tên sản phẩm"],
@@ -12,38 +20,36 @@ const ProductSchema = new mongoose.Schema({
     required: [true, "Vui lòng nhập giá sản phẩm"],
     min: [0, "Giá sản phẩm không được âm"],
   },
-  oldPrice: {
+  old_price: {
     type: Number,
     default: null,
+  },
+  image_url: {
+    type: String,
+    default: "/placeholder.svg",
+  },
+  images: {
+    type: [String],
+    default: [],
   },
   description: {
     type: String,
     required: [true, "Vui lòng nhập mô tả sản phẩm"],
   },
-  imageUrl: {
+  category_id: {
     type: String,
-    default: "/placeholder.svg",
-  },
-  category: {
-    type: mongoose.Schema.ObjectId,
-    ref: "Category",
+    ref: 'Category',
     required: true,
-  },
-  stock: {
-    type: Number,
-    required: [true, "Vui lòng nhập số lượng tồn kho"],
-    min: [0, "Số lượng tồn kho không được âm"],
-    default: 0,
   },
   rating: {
     type: Number,
     default: 0,
   },
-  reviewCount: {
+  review_count: {
     type: Number,
     default: 0,
   },
-  isNewProduct: {
+  is_new: {
     type: Boolean,
     default: false,
   },
@@ -51,10 +57,16 @@ const ProductSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  stock: {
+    type: Number,
+    required: [true, "Vui lòng nhập số lượng tồn kho"],
+    min: [0, "Số lượng tồn kho không được âm"],
+    default: 0,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
   },
-})
+});
 
-module.exports = mongoose.model("Product", ProductSchema)
+module.exports = mongoose.model("Product", ProductSchema);

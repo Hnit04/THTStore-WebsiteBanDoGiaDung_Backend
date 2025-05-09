@@ -1,4 +1,7 @@
 const mongoose = require("mongoose")
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('Connected to MongoDB Atlas!'))
+  .catch(err => console.error('Connection error:', err));
 const slugify = require("slugify")
 
 const CategorySchema = new mongoose.Schema({
@@ -25,7 +28,8 @@ const CategorySchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
-})
+}
+)
 
 // Create category slug from the name
 CategorySchema.pre("save", function (next) {

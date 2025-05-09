@@ -1,0 +1,30 @@
+{"level":"info","message":"Server đang chạy trên cổng 5000","timestamp":"2025-05-09T07:23:04.218Z"}
+{"level":"error","message":"Lỗi gọi API SEPay getaddrinfo ENOTFOUND api.sepay.vn","timestamp":"2025-05-09T07:23:14.725Z"}
+{"level":"error","message":"Lỗi gọi API SEPay getaddrinfo ENOTFOUND api.sepay.vn","timestamp":"2025-05-09T07:23:18.096Z"}
+{"level":"error","message":"Lỗi gọi API SEPay getaddrinfo ENOTFOUND api.sepay.vn","timestamp":"2025-05-09T07:23:27.187Z"}
+{"level":"info","message":"Server đang chạy trên cổng 5000","timestamp":"2025-05-09T07:31:33.650Z"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:31:35.251Z","transaction_id":"THT1746775894859"}
+{"level":"info","message":"Server đang chạy trên cổng 5000","timestamp":"2025-05-09T07:36:07.665Z"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:36:26.921Z","transaction_id":"THT1746776186163"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:38:31.841Z","transaction_id":"THT1746776311469"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:38:37.738Z","transaction_id":"THT1746776317435"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:39:37.938Z","transaction_id":"THT1746776377576"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:44:08.192Z","transaction_id":"THT1746776647642"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:44:19.570Z","transaction_id":"THT1746776658927"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:47:22.096Z","transaction_id":"THT1746776841683"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:49:17.856Z","transaction_id":"THT1746776957549"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:54:17.209Z","transaction_id":"THT1746777256854"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:54:18.689Z","transaction_id":"THT1746777258438"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:56:18.605Z","transaction_id":"THT1746777378236"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T07:56:24.483Z","transaction_id":"THT1746777384212"}
+{"level":"info","message":"Server đang chạy trên cổng 5000","timestamp":"2025-05-09T08:00:00.988Z"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T08:00:04.027Z","transaction_id":"THT1746777603066"}
+{"level":"info","message":"Gọi API SEPay thành công","timestamp":"2025-05-09T08:01:52.060Z","transaction_id":"THT1746777711671"}
+{"level":"info","message":"Server đang chạy trên cổng 5000","timestamp":"2025-05-09T08:09:51.269Z"}
+{"level":"info","message":"Server đang chạy trên cổng 5000","timestamp":"2025-05-09T08:10:10.433Z"}
+{"level":"error","message":"Lỗi gọi API SEPay: undefined/transactions/create Invalid URL","timestamp":"2025-05-09T08:13:52.094Z"}
+{"level":"error","message":"Lỗi gọi API SEPay: undefined/transactions/create Invalid URL","timestamp":"2025-05-09T08:13:53.515Z"}
+{"level":"info","message":"Server đang chạy trên cổng 5000","timestamp":"2025-05-09T08:55:26.847Z"}
+{"level":"info","message":"Server đang chạy trên cổng 5000","timestamp":"2025-05-09T09:13:39.467Z"}
+{"error":"TypeError: Cannot read properties of null (reading '_id')\n    at exports.getMe (C:\\Users\\Tinh\\Documents\\GitHub\\THTStore-WebsiteBanDoGiaDung\\bandogiadung\\server\\controllers\\authController.js:322:47)\n    at Layer.handle [as handle_request] (C:\\Users\\Tinh\\Documents\\GitHub\\THTStore-WebsiteBanDoGiaDung\\bandogiadung\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Tinh\\Documents\\GitHub\\THTStore-WebsiteBanDoGiaDung\\bandogiadung\\server\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at exports.protect (C:\\Users\\Tinh\\Documents\\GitHub\\THTStore-WebsiteBanDoGiaDung\\bandogiadung\\server\\middleware\\authMiddleware.js:30:5)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","level":"error","message":"Lỗi server","timestamp":"2025-05-09T09:37:31.002Z"}
+{"error":"TypeError: Cannot read properties of null (reading '_id')\n    at exports.getMe (C:\\Users\\Tinh\\Documents\\GitHub\\THTStore-WebsiteBanDoGiaDung\\bandogiadung\\server\\controllers\\authController.js:322:47)\n    at Layer.handle [as handle_request] (C:\\Users\\Tinh\\Documents\\GitHub\\THTStore-WebsiteBanDoGiaDung\\bandogiadung\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Tinh\\Documents\\GitHub\\THTStore-WebsiteBanDoGiaDung\\bandogiadung\\server\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at exports.protect (C:\\Users\\Tinh\\Documents\\GitHub\\THTStore-WebsiteBanDoGiaDung\\bandogiadung\\server\\middleware\\authMiddleware.js:30:5)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","level":"error","message":"Lỗi server","timestamp":"2025-05-09T09:37:31.077Z"}
