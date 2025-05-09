@@ -14,10 +14,15 @@ const logger = require("./logger");
 dotenv.config();
 connectDB();
 
-// Cấu hình allowedOrigins với trim và log để debug
+// Cấu hình allowedOrigins với log chi tiết
 const allowedOrigins = process.env.CLIENT_URL
     ? process.env.CLIENT_URL.split(",").map((origin) => origin.trim())
     : ["https://tht-store.vercel.app"];
+// Thêm kiểm tra cứng để đảm bảo origin chính xác
+if (!allowedOrigins.includes("https://tht-store.vercel.app")) {
+  allowedOrigins.push("https://tht-store.vercel.app");
+}
+logger.info(`CLIENT_URL: ${process.env.CLIENT_URL}`);
 logger.info(`Allowed origins: ${JSON.stringify(allowedOrigins)}`);
 
 // Cấu hình CORS chi tiết
