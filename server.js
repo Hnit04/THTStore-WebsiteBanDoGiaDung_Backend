@@ -14,7 +14,7 @@ const logger = require("./logger");
 dotenv.config();
 connectDB();
 
-const allowedOrigins = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(",") : ["https://tht-store.vercel.app"];
+const allowedOrigins = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(",") : ["https://tht-store-atme34f3s-vinhthai2612-gmailcoms-projects.vercel.app"];
 
 const app = express();
 const server = http.createServer(app);

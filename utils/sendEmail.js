@@ -33,7 +33,7 @@ const generateEmailHTML = (subject, message, code) => `
       <hr style="border-top: 1px solid #eee; margin: 20px 0;">
       <p style="color: #666; font-size: 12px; text-align: center;">
         © ${new Date().getFullYear()} THT Store. All rights reserved.<br>
-        <a href="${process.env.WEBSITE_URL || 'https://tht-store.vercel.app/'}" style="color: #d32f2f; text-decoration: none;">Visit our website</a>
+        <a href="${process.env.WEBSITE_URL || 'https://tht-store-atme34f3s-vinhthai2612-gmailcoms-projects.vercel.app/'}" style="color: #d32f2f; text-decoration: none;">Visit our website</a>
       </p>
     </div>
   </div>
