@@ -14,14 +14,16 @@ const logger = require("./logger");
 dotenv.config();
 connectDB();
 
-// Cấu hình allowedOrigins với trim để loại bỏ khoảng trắng
+// Cấu hình allowedOrigins với trim và log để debug
 const allowedOrigins = process.env.CLIENT_URL
     ? process.env.CLIENT_URL.split(",").map((origin) => origin.trim())
     : ["https://tht-store.vercel.app"];
+logger.info(`Allowed origins: ${JSON.stringify(allowedOrigins)}`);
 
 // Cấu hình CORS chi tiết
 const corsOptions = {
   origin: (origin, callback) => {
+    logger.info(`Checking origin: ${origin}`);
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -32,13 +34,13 @@ const corsOptions = {
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
-  optionsSuccessStatus: 200, // Đảm bảo phản hồi preflight trả về 200
+  optionsSuccessStatus: 200,
 };
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: corsOptions, // Sử dụng cùng corsOptions cho Socket.IO
+  cors: corsOptions,
 });
 
 // Áp dụng CORS middleware
