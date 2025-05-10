@@ -3,7 +3,6 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const axios = require("axios");
-const crypto = require("crypto");
 const { Server } = require("socket.io");
 const http = require("http");
 const mongoose = require("mongoose");
@@ -14,20 +13,16 @@ const logger = require("./logger");
 dotenv.config();
 connectDB();
 
-// Cấu hình allowedOrigins với loại bỏ / thừa
+// Cấu hình allowedOrigins
 const allowedOrigins = process.env.CLIENT_URL
-    ? process.env.CLIENT_URL
-        .split(",")
-        .map((origin) => origin.trim().replace(/\/+$/, "")) // Loại bỏ / ở cuối
+    ? process.env.CLIENT_URL.split(",").map((origin) => origin.trim().replace(/\/+$/, ""))
     : ["https://tht-store.vercel.app"];
-// Thêm kiểm tra cứng để đảm bảo origin chính xác
 if (!allowedOrigins.includes("https://tht-store.vercel.app")) {
   allowedOrigins.push("https://tht-store.vercel.app");
 }
 logger.info(`CLIENT_URL: ${process.env.CLIENT_URL}`);
 logger.info(`Allowed origins: ${JSON.stringify(allowedOrigins)}`);
 
-// Cấu hình CORS chi tiết
 const corsOptions = {
   origin: (origin, callback) => {
     logger.info(`Checking origin: ${origin}`);
@@ -50,12 +45,10 @@ const io = new Server(server, {
   cors: corsOptions,
 });
 
-// Áp dụng CORS middleware
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // Xử lý preflight cho tất cả route
+app.options("*", cors(corsOptions));
 app.use(express.json());
 
-// Log để debug yêu cầu
 app.use((req, res, next) => {
   logger.info(`Received request: ${req.method} ${req.url} from origin: ${req.headers.origin}`);
   next();
@@ -88,7 +81,7 @@ emailQueue.process(async (job) => {
   await transporter.sendMail(job.data);
 });
 
-const CLIENT_KEY = process.env.SEPAY_CLIENT_KEY;
+const CLIENT_KEY = process.env.SEPAY_API_KEY; // Sử dụng SEPAY_API_KEY
 const SEPAY_API_URL = process.env.SEPAY_API_URL;
 
 app.use("/api/auth", require("./routes/authRoutes"));
@@ -102,8 +95,8 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
   const { transaction_id, amount, description, items, bank_account, customerEmail } = req.body;
 
   if (!CLIENT_KEY) {
-    logger.error("Thiếu SEPay Client Key");
-    return res.status(500).json({ success: false, error: "Thiếu SEPay Client Key" });
+    logger.error("Thiếu SEPay API Key");
+    return res.status(500).json({ success: false, error: "Thiếu SEPay API Key" });
   }
 
   const transaction = new Transaction({
@@ -129,16 +122,16 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
   try {
     const response = await axios.post(`${SEPAY_API_URL}/transactions/create`, payload, {
       headers: {
-        Authorization: `Bearer ${CLIENT_KEY}`,
+        Authorization: `apikey ${CLIENT_KEY}`, // Sửa header
         "Content-Type": "application/json",
       },
       timeout: 10000,
     });
 
-    logger.info(`Gọi API SEPay thành công: ${SEPAY_API_URL}/transactions/create`, { transaction_id });
+    logger.info(`Gọi API SePay thành công: ${SEPAY_API_URL}/transactions/create`, { transaction_id });
 
     if (!response.data.success) {
-      throw new Error(response.data.message || "Lỗi không xác định từ SEPay");
+      throw new Error(response.data.message || "Lỗi không xác định từ SePay");
     }
 
     transaction.status = "CREATED";
@@ -160,7 +153,7 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
       checkoutUrl: response.data.checkout_url,
     });
   } catch (error) {
-    logger.error(`Lỗi gọi API SEPay: ${SEPAY_API_URL}/transactions/create`, {
+    logger.error(`Lỗi gọi API SePay: ${SEPAY_API_URL}/transactions/create`, {
       message: error.message,
       status: error.response?.status,
       data: error.response?.data,
@@ -181,7 +174,7 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
 
     res.status(500).json({
       success: false,
-      error: `Không thể kết nối SEPay: ${error.message}`,
+      error: `Không thể kết nối SePay: ${error.message}`,
       transactionId: transaction_id,
     });
   }
@@ -212,23 +205,14 @@ app.get("/api/sepay/transaction/:transactionId", async (req, res) => {
 });
 
 app.post("/api/sepay/webhook", async (req, res) => {
-  const signature = req.headers["x-sepay-signature"];
-  const secret = process.env.SEPAY_WEBHOOK_SECRET;
-  const computedSignature = crypto.createHmac("sha256", secret).update(JSON.stringify(req.body)).digest("hex");
-
-  if (signature !== computedSignature) {
-    logger.error("Webhook chữ ký không hợp lệ", { signature, computedSignature });
-    return res.status(401).json({ success: false, error: "Chữ ký không hợp lệ" });
-  }
-
-  logger.info("Nhận webhook từ SEPay", { body: req.body });
+  logger.info("Nhận webhook từ SePay", { body: req.body });
   const { transaction_id, status, amount } = req.body;
 
   try {
     const transaction = await Transaction.findOneAndUpdate(
         { transactionId: transaction_id },
         { status, amount },
-        { new: true, upsert: true },
+        { new: true, upsert: true }
     );
 
     io.emit("transactionUpdate", { transactionId: transaction_id, status });
@@ -253,26 +237,26 @@ app.post("/api/sepay/webhook", async (req, res) => {
     res.status(200).json({ success: true, message: "Webhook nhận thành công" });
   } catch (error) {
     logger.error("Lỗi xử lý webhook", { error: error.message });
-    res.status(500).json({ success: false, error: "Lỗi xử lý webhook" });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 app.get("/api/sepay/check-connection", async (req, res) => {
   if (!CLIENT_KEY) {
-    logger.error("Thiếu SEPay Client Key");
-    return res.status(500).json({ success: false, error: "Thiếu SEPay Client Key" });
+    logger.error("Thiếu SEPay API Key");
+    return res.status(500).json({ success: false, error: "Thiếu SEPay API Key" });
   }
 
   try {
     const response = await axios.get(`${SEPAY_API_URL}/status`, {
-      headers: { Authorization: `Bearer ${CLIENT_KEY}` },
+      headers: { Authorization: `apikey ${CLIENT_KEY}` },
       timeout: 5000,
     });
 
-    logger.info("Kiểm tra kết nối SEPay thành công");
+    logger.info("Kiểm tra kết nối SePay thành công");
     res.json({ success: true, status: "success", data: response.data });
   } catch (error) {
-    logger.error("Lỗi kiểm tra kết nối SEPay", {
+    logger.error("Lỗi kiểm tra kết nối SePay", {
       error: error.message,
       status: error.response?.status,
     });
@@ -285,7 +269,6 @@ app.get("/api/sepay/check-connection", async (req, res) => {
   }
 });
 
-// Middleware xử lý lỗi
 app.use((err, req, res, next) => {
   logger.error("Lỗi server", { error: err.stack });
   res.status(500).json({

@@ -1,12 +1,10 @@
 const axios = require("axios");
 const Transaction = require("../models/Transaction");
 const Queue = require("bull");
-const crypto = require("crypto");
 const logger = require("../logger");
 
 const SEPAY_API_KEY = process.env.SEPAY_API_KEY;
 const SEPAY_API_URL = process.env.SEPAY_API_URL;
-const SEPAY_WEBHOOK_SECRET = process.env.SEPAY_WEBHOOK_SECRET;
 
 const emailQueue = new Queue("emailQueue");
 
@@ -41,21 +39,21 @@ exports.createTransaction = async (req, res) => {
     try {
         const response = await axios.post(`${SEPAY_API_URL}/transactions/create`, payload, {
             headers: {
-                Authorization: `apikey ${SEPAY_API_KEY}`,
+                Authorization: `apikey ${SEPAY_API_KEY}`, // Sửa header
                 "Content-Type": "application/json",
             },
             timeout: 10000,
         });
 
-        logger.info(`Gọi API SEPay thành công: ${SEPAY_API_URL}/transactions/create`, { transaction_id });
-        console.log("SEPay API response:", JSON.stringify(response.data, null, 2));
+        logger.info(`Gọi API SePay thành công: ${SEPAY_API_URL}/transactions/create`, { transaction_id });
+        console.log("SePay API response:", JSON.stringify(response.data, null, 2));
 
         if (!response.data.success) {
-            throw new Error(response.data.message || "Lỗi không xác định từ SEPay");
+            throw new Error(response.data.message || "Lỗi không xác định từ SePay");
         }
 
         if (!response.data.qr_code_url) {
-            throw new Error("Không nhận được qr_code_url từ SEPay");
+            throw new Error("Không nhận được qr_code_url từ SePay");
         }
 
         transaction.status = "CREATED";
@@ -77,7 +75,7 @@ exports.createTransaction = async (req, res) => {
             checkoutUrl: response.data.checkout_url,
         });
     } catch (error) {
-        logger.error(`Lỗi gọi API SEPay: ${SEPAY_API_URL}/transactions/create`, {
+        logger.error(`Lỗi gọi API SePay: ${SEPAY_API_URL}/transactions/create`, {
             message: error.message,
             status: error.response?.status,
             data: error.response?.data,
@@ -96,11 +94,11 @@ exports.createTransaction = async (req, res) => {
             error: error.message,
         });
 
-        let errorMessage = `Không thể kết nối SEPay: ${error.message}`;
+        let errorMessage = `Không thể kết nối SePay: ${error.message}`;
         if (error.code === "ENOTFOUND") {
-            errorMessage = "Không thể kết nối đến máy chủ SEPay. Vui lòng kiểm tra URL API.";
+            errorMessage = "Không thể kết nối đến máy chủ SePay. Vui lòng kiểm tra URL API.";
         } else if (error.response?.status === 401) {
-            errorMessage = "Lỗi xác thực với SEPay. Vui lòng kiểm tra API Key.";
+            errorMessage = "Lỗi xác thực với SePay. Vui lòng kiểm tra API Key.";
         }
 
         res.status(500).json({ success: false, error: errorMessage });
@@ -108,23 +106,7 @@ exports.createTransaction = async (req, res) => {
 };
 
 exports.handleWebhook = async (req, res) => {
-    const signature = req.headers["x-sepay-signature"];
-    if (!SEPAY_WEBHOOK_SECRET) {
-        logger.error("Thiếu SEPay Webhook Secret");
-        return res.status(500).json({ success: false, error: "Thiếu SEPay Webhook Secret" });
-    }
-
-    const computedSignature = crypto
-        .createHmac("sha256", SEPAY_WEBHOOK_SECRET)
-        .update(JSON.stringify(req.body))
-        .digest("hex");
-
-    if (signature !== computedSignature) {
-        logger.error("Webhook chữ ký không hợp lệ", { signature, computedSignature });
-        return res.status(401).json({ success: false, error: "Chữ ký không hợp lệ" });
-    }
-
-    logger.info("Nhận webhook từ SEPay", { body: req.body });
+    logger.info("Nhận webhook từ SePay", { body: req.body });
     const { transaction_id, status, amount } = req.body;
 
     try {
