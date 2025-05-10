@@ -42,44 +42,18 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: corsOptions });
 
+// Middleware chung
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 app.use(express.json());
 
-app.use((req, res, next) => {
-  logger.info(`Received request: ${req.method} ${req.url} from origin: ${req.headers.origin}`);
-  next();
-});
-
-// Middleware xác thực webhook từ SEPay
-const verifyWebhook = (req, res, next) => {
-  const signature = req.headers["x-signature"];
-  const webhookSecret = process.env.SEPAY_WEBHOOK_SECRET;
-
-  if (!signature) {
-    logger.warn("Webhook missing signature", { headers: req.headers });
-    return res.status(401).json({ success: false, error: "Missing webhook signature" });
-  }
-
-  // Giả sử SEPay gửi một chữ ký đơn giản (cần kiểm tra tài liệu SEPay để biết cách xác thực chính xác)
-  // Đây là ví dụ cơ bản, bạn cần điều chỉnh theo tài liệu của SEPay
-  const expectedSignature = webhookSecret; // Thay bằng logic xác thực thực tế
-  if (signature !== expectedSignature) {
-    logger.warn("Invalid webhook signature", { signature, expectedSignature });
-    return res.status(401).json({ success: false, error: "Invalid webhook signature" });
-  }
-
-  next();
-};
-
-// Middleware xử lý preflight request cho webhook
+// Route độc lập cho webhook (không áp dụng middleware protect)
 app.options("/api/sepay/webhook", cors(corsOptions), (req, res) => {
   logger.info("Handling OPTIONS preflight request for webhook", { method: req.method, headers: req.headers });
   res.status(200).end();
 });
 
-// Route xử lý webhook từ SEPay (không áp dụng protect)
-app.post("/api/sepay/webhook", verifyWebhook, async (req, res) => {
+app.post("/api/sepay/webhook", (req, res) => {
   logger.info("Received webhook from SePay", {
     body: req.body,
     headers: req.headers,
@@ -160,14 +134,16 @@ emailQueue.process(async (job) => {
   await transporter.sendMail(job.data);
 });
 
-app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/products", require("./routes/productRoutes"));
-app.use("/api/categories", require("./routes/categoryRoutes"));
-app.use("/api/cart", require("./routes/cartRoutes"));
-app.use("/api/orders", require("./routes/orderRoutes"));
-app.use("/api/users", require("./routes/userRoutes"));
+// Áp dụng middleware protect cho các route khác (trừ /api/sepay/webhook)
+const { protect } = require("./middleware/authMiddleware");
+app.use("/api/auth", protect, require("./routes/authRoutes"));
+app.use("/api/products", protect, require("./routes/productRoutes"));
+app.use("/api/categories", protect, require("./routes/categoryRoutes"));
+app.use("/api/cart", protect, require("./routes/cartRoutes"));
+app.use("/api/orders", protect, require("./routes/orderRoutes"));
+app.use("/api/users", protect, require("./routes/userRoutes"));
 
-app.post("/api/sepay/create-transaction", async (req, res) => {
+app.post("/api/sepay/create-transaction", protect, async (req, res) => {
   const { transaction_id, amount, description, items, bank_account, customerEmail } = req.body;
 
   logger.info("Received create-transaction request", { bank_account });
@@ -238,7 +214,7 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
   }
 });
 
-app.get("/api/sepay/transaction/:transactionId", async (req, res) => {
+app.get("/api/sepay/transaction/:transactionId", protect, async (req, res) => {
   const { transactionId } = req.params;
 
   try {
