@@ -70,6 +70,7 @@ router.post("/create-transaction", async (req, res) => {
 
         req.io = req.app.get("socketio");
         if (req.io) {
+            logger.info(`[CREATE] Emitting transactionUpdate for ${transaction_id}, status: CREATED`);
             req.io.emit("transactionUpdate", {
                 transactionId: transaction_id,
                 status: "CREATED",
@@ -173,6 +174,7 @@ router.post("/webhook", async (req, res) => {
 
         req.io = req.app.get("socketio");
         if (req.io) {
+            logger.info(`[WEBHOOK] Emitting transactionUpdate for ${transaction.transactionId}, status: ${status}`);
             req.io.emit("transactionUpdate", { transactionId: transaction.transactionId, status });
         } else {
             logger.warn("[WEBHOOK] Socket.IO instance not found in app");
