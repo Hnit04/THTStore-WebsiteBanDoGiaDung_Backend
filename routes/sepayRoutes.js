@@ -182,27 +182,30 @@ router.post("/webhook", async (req, res) => {
         }
 
         if (status === "SUCCESS") {
-            // Kiểm tra metadata và customerEmail
             const metadata = transaction.metadata || {};
             const customerEmail = metadata.customerEmail || "default@example.com";
             const itemsList = metadata.items
                 ? metadata.items.map((item) => `${item.name} (x${item.quantity}): ${item.price} VND`).join("\n")
                 : "Không có thông tin chi tiết sản phẩm";
 
-            const mailOptions = {
-                from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
-                to: customerEmail,
-                subject: "Xác nhận thanh toán thành công - THT Store",
-                text: `Chào bạn,\n\nGiao dịch #${transaction_id} đã thành công!\n\nChi tiết:\n${itemsList}\nTổng: ${amount} VND\n\nCảm ơn bạn đã mua sắm tại THT Store.`,
-            };
+            try {
+                const mailOptions = {
+                    from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
+                    to: customerEmail,
+                    subject: "Xác nhận thanh toán thành công - THT Store",
+                    text: `Chào bạn,\n\nGiao dịch #${transaction_id} đã thành công!\n\nChi tiết:\n${itemsList}\nTổng: ${amount} VND\n\nCảm ơn bạn đã mua sắm tại THT Store.`,
+                };
 
-            await emailQueue.add(mailOptions);
-            logger.info(`[WEBHOOK] Email xác nhận được xếp hàng cho giao dịch ${transaction_id}`);
+                await emailQueue.add(mailOptions);
+                logger.info(`[WEBHOOK] Email xác nhận được xếp hàng cho giao dịch ${transaction_id}`);
+            } catch (emailError) {
+                logger.error("[WEBHOOK] Lỗi gửi email", { error: emailError.message, transaction_id });
+            }
         }
 
         res.status(200).json({ success: true, message: "Webhook nhận và xử lý thành công" });
     } catch (error) {
-        logger.error("[WEBHOOK] Lỗi xử lý webhook", { error: error.message, body: req.body });
+        logger.error("[WEBHOOK] Lỗi xử lý webhook", { error: error.message, body: req.body, stack: error.stack });
         res.status(500).json({ success: false, error: error.message });
     }
 });
