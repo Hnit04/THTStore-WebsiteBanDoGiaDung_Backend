@@ -87,6 +87,8 @@ app.use("/api/users", require("./routes/userRoutes"));
 app.post("/api/sepay/create-transaction", async (req, res) => {
   const { transaction_id, amount, description, items, bank_account, customerEmail } = req.body;
 
+  logger.info("Received create-transaction request", { bank_account });
+
   const transaction = new Transaction({
     transactionId: transaction_id,
     status: "PENDING",
@@ -96,8 +98,23 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
   await transaction.save();
 
   try {
+    // Sử dụng số tài khoản mặc định nếu không có hoặc không hợp lệ
+    let accountNumber = "0326829327"; // Số tài khoản của Trần Công Tình
+    if (bank_account) {
+      if (typeof bank_account === "object" && bank_account !== null) {
+        accountNumber = bank_account.account || bank_account.number || bank_account.id || bank_account.value || "0326829327";
+        logger.info(`Converted bank_account object to: ${accountNumber}`);
+      } else if (typeof bank_account === "string") {
+        accountNumber = bank_account;
+      } else {
+        logger.warn("Invalid bank_account format, using default", { bank_account });
+      }
+    }
+
     // Tạo QR Code động qua qr.sepay.vn
-    const qrCodeUrl = `https://qr.sepay.vn/img?acc=${bank_account}&bank=MBBank&amount=${amount}&des=${transaction_id}`;
+    const qrCodeUrl = `https://qr.sepay.vn/img?acc=${accountNumber}&bank=MBBank&amount=${amount}&des=${transaction_id}`;
+    logger.info(`Generated QR Code URL: ${qrCodeUrl}`);
+
     transaction.status = "CREATED";
     transaction.qrCodeUrl = qrCodeUrl;
     await transaction.save();
@@ -116,6 +133,7 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
   } catch (error) {
     logger.error("Lỗi tạo giao dịch SePay", {
       message: error.message,
+      bank_account: bank_account,
     });
 
     transaction.status = "FAILED";
