@@ -131,7 +131,7 @@ router.get("/transaction/:transactionId", async (req, res) => {
 router.post("/webhook", async (req, res) => {
     logger.info(`[WEBHOOK] Processing webhook for ${req.url}, body: ${JSON.stringify(req.body)}, headers: ${JSON.stringify(req.headers)}`);
 
-    const { id: sepayId, transferAmount: amount, transferType } = req.body;
+    const { id: sepayId, transferAmount: amount, transferType, description, content } = req.body;
 
     try {
         if (!sepayId || !transferType) {
@@ -141,15 +141,42 @@ router.post("/webhook", async (req, res) => {
 
         const status = transferType === "in" ? "SUCCESS" : "PENDING";
 
-        logger.info(`[WEBHOOK] Attempting to update transaction with SEPay ID ${sepayId} to status ${status} and amount ${amount}`);
-        const transaction = await Transaction.findOneAndUpdate(
-            { "metadata.referenceCode": req.body.referenceCode || sepayId },
-            { status, amount },
-            { new: true, upsert: true }
-        );
+        // Trích xuất transactionId từ description hoặc content
+        let transactionId = null;
+        const textToSearch = description || content || "";
+        if (textToSearch) {
+            const match = textToSearch.match(/THT\d+/);
+            if (match) {
+                transactionId = match[0];
+                logger.info(`[WEBHOOK] Extracted transactionId from ${description ? "description" : "content"}: ${transactionId}`);
+            }
+        }
+
+        // Tìm giao dịch dựa trên transactionId hoặc sepayId
+        let transaction;
+        if (transactionId) {
+            const query = { transactionId };
+            logger.info(`[WEBHOOK] Finding transaction with query: ${JSON.stringify(query)}`);
+            transaction = await Transaction.findOneAndUpdate(
+                query,
+                { status, amount },
+                { new: true }
+            );
+        }
+
+        // Nếu không tìm thấy bằng transactionId, thử tìm bằng sepayId
+        if (!transaction) {
+            const query = { "metadata.referenceCode": sepayId };
+            logger.info(`[WEBHOOK] Finding transaction with fallback query: ${JSON.stringify(query)}`);
+            transaction = await Transaction.findOneAndUpdate(
+                query,
+                { status, amount },
+                { new: true }
+            );
+        }
 
         if (!transaction) {
-            logger.warn("[WEBHOOK] Transaction not found for update", { sepayId });
+            logger.warn(`[WEBHOOK] Transaction not found for sepayId: ${sepayId}`);
             return res.status(404).json({ success: false, error: "Không tìm thấy giao dịch" });
         }
 
@@ -157,8 +184,9 @@ router.post("/webhook", async (req, res) => {
 
         req.io = req.app.get("socketio");
         if (req.io) {
-            logger.info(`[WEBHOOK] Emitting transactionUpdate with data: ${JSON.stringify({ transactionId: transaction.transactionId, status })}`);
-            req.io.emit("transactionUpdate", { transactionId: transaction.transactionId, status });
+            const updateData = { transactionId: transaction.transactionId, status };
+            logger.info(`[WEBHOOK] Emitting transactionUpdate with data: ${JSON.stringify(updateData)}`);
+            req.io.emit("transactionUpdate", updateData);
         } else {
             logger.warn("[WEBHOOK] Socket.IO instance not found in app");
         }
