@@ -2,7 +2,6 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
-const axios = require("axios");
 const { Server } = require("socket.io");
 const http = require("http");
 const mongoose = require("mongoose");
@@ -13,7 +12,6 @@ const logger = require("./logger");
 dotenv.config();
 connectDB();
 
-// Cấu hình allowedOrigins
 const allowedOrigins = process.env.CLIENT_URL
     ? process.env.CLIENT_URL.split(",").map((origin) => origin.trim().replace(/\/+$/, ""))
     : ["https://tht-store.vercel.app"];
@@ -41,9 +39,7 @@ const corsOptions = {
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: corsOptions,
-});
+const io = new Server(server, { cors: corsOptions });
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
@@ -81,9 +77,6 @@ emailQueue.process(async (job) => {
   await transporter.sendMail(job.data);
 });
 
-const CLIENT_KEY = process.env.SEPAY_API_KEY; // Sử dụng SEPAY_API_KEY
-const SEPAY_API_URL = process.env.SEPAY_API_URL;
-
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/products", require("./routes/productRoutes"));
 app.use("/api/categories", require("./routes/categoryRoutes"));
@@ -94,11 +87,6 @@ app.use("/api/users", require("./routes/userRoutes"));
 app.post("/api/sepay/create-transaction", async (req, res) => {
   const { transaction_id, amount, description, items, bank_account, customerEmail } = req.body;
 
-  if (!CLIENT_KEY) {
-    logger.error("Thiếu SEPay API Key");
-    return res.status(500).json({ success: false, error: "Thiếu SEPay API Key" });
-  }
-
   const transaction = new Transaction({
     transactionId: transaction_id,
     status: "PENDING",
@@ -107,62 +95,33 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
   });
   await transaction.save();
 
-  const payload = {
-    client_key: CLIENT_KEY,
-    transaction_id,
-    amount,
-    description,
-    items,
-    bank_account,
-    currency: "VND",
-    return_url: `${process.env.CLIENT_URL}/order-confirmation`,
-    callback_url: `${process.env.CLIENT_URL}/api/sepay/webhook`,
-  };
-
   try {
-    const response = await axios.post(`${SEPAY_API_URL}/transactions/create`, payload, {
-      headers: {
-        Authorization: `apikey ${CLIENT_KEY}`, // Sửa header
-        "Content-Type": "application/json",
-      },
-      timeout: 10000,
-    });
-
-    logger.info(`Gọi API SePay thành công: ${SEPAY_API_URL}/transactions/create`, { transaction_id });
-
-    if (!response.data.success) {
-      throw new Error(response.data.message || "Lỗi không xác định từ SePay");
-    }
-
+    // Tạo QR Code động qua qr.sepay.vn
+    const qrCodeUrl = `https://qr.sepay.vn/img?acc=${bank_account}&bank=MBBank&amount=${amount}&des=${transaction_id}`;
     transaction.status = "CREATED";
-    transaction.qrCodeUrl = response.data.qr_code_url;
-    transaction.checkoutUrl = response.data.checkout_url;
+    transaction.qrCodeUrl = qrCodeUrl;
     await transaction.save();
 
     io.emit("transactionUpdate", {
       transactionId: transaction_id,
       status: "CREATED",
-      qrCodeUrl: response.data.qr_code_url,
-      checkoutUrl: response.data.checkout_url,
+      qrCodeUrl: qrCodeUrl,
     });
 
     res.json({
       success: true,
       transactionId: transaction_id,
-      qrCodeUrl: response.data.qr_code_url,
-      checkoutUrl: response.data.checkout_url,
+      qrCodeUrl: qrCodeUrl,
     });
   } catch (error) {
-    logger.error(`Lỗi gọi API SePay: ${SEPAY_API_URL}/transactions/create`, {
+    logger.error("Lỗi tạo giao dịch SePay", {
       message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
     });
 
     transaction.status = "FAILED";
     transaction.errorLogs.push({
       timestamp: new Date(),
-      error: { message: error.message, status: error.response?.status },
+      error: { message: error.message },
     });
     await transaction.save();
 
@@ -174,7 +133,7 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
 
     res.status(500).json({
       success: false,
-      error: `Không thể kết nối SePay: ${error.message}`,
+      error: `Không thể tạo giao dịch: ${error.message}`,
       transactionId: transaction_id,
     });
   }
@@ -238,34 +197,6 @@ app.post("/api/sepay/webhook", async (req, res) => {
   } catch (error) {
     logger.error("Lỗi xử lý webhook", { error: error.message });
     res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get("/api/sepay/check-connection", async (req, res) => {
-  if (!CLIENT_KEY) {
-    logger.error("Thiếu SEPay API Key");
-    return res.status(500).json({ success: false, error: "Thiếu SEPay API Key" });
-  }
-
-  try {
-    const response = await axios.get(`${SEPAY_API_URL}/status`, {
-      headers: { Authorization: `apikey ${CLIENT_KEY}` },
-      timeout: 5000,
-    });
-
-    logger.info("Kiểm tra kết nối SePay thành công");
-    res.json({ success: true, status: "success", data: response.data });
-  } catch (error) {
-    logger.error("Lỗi kiểm tra kết nối SePay", {
-      error: error.message,
-      status: error.response?.status,
-    });
-    res.json({
-      success: false,
-      status: "error",
-      error: error.message,
-      statusCode: error.response?.status,
-    });
   }
 });
 

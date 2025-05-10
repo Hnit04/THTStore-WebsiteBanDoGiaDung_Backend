@@ -1,20 +1,11 @@
-const axios = require("axios");
 const Transaction = require("../models/Transaction");
 const Queue = require("bull");
 const logger = require("../logger");
-
-const SEPAY_API_KEY = process.env.SEPAY_API_KEY;
-const SEPAY_API_URL = process.env.SEPAY_API_URL;
 
 const emailQueue = new Queue("emailQueue");
 
 exports.createTransaction = async (req, res) => {
     const { transaction_id, amount, description, items, bank_account, customerEmail } = req.body;
-
-    if (!SEPAY_API_KEY) {
-        logger.error("Thiếu SEPay API Key");
-        return res.status(500).json({ success: false, error: "Thiếu SEPay API Key" });
-    }
 
     const transaction = new Transaction({
         transactionId: transaction_id,
@@ -24,67 +15,33 @@ exports.createTransaction = async (req, res) => {
     });
     await transaction.save();
 
-    const payload = {
-        client_key: SEPAY_API_KEY,
-        transaction_id,
-        amount,
-        description,
-        items,
-        bank_account,
-        currency: "VND",
-        return_url: `${process.env.CLIENT_URL}/order-confirmation`,
-        callback_url: `${process.env.CLIENT_URL}/api/sepay/webhook`,
-    };
-
     try {
-        const response = await axios.post(`${SEPAY_API_URL}/transactions/create`, payload, {
-            headers: {
-                Authorization: `apikey ${SEPAY_API_KEY}`, // Sửa header
-                "Content-Type": "application/json",
-            },
-            timeout: 10000,
-        });
-
-        logger.info(`Gọi API SePay thành công: ${SEPAY_API_URL}/transactions/create`, { transaction_id });
-        console.log("SePay API response:", JSON.stringify(response.data, null, 2));
-
-        if (!response.data.success) {
-            throw new Error(response.data.message || "Lỗi không xác định từ SePay");
-        }
-
-        if (!response.data.qr_code_url) {
-            throw new Error("Không nhận được qr_code_url từ SePay");
-        }
-
+        // Tạo QR Code động qua qr.sepay.vn
+        const qrCodeUrl = `https://qr.sepay.vn/img?acc=${bank_account}&bank=MBBank&amount=${amount}&des=${transaction_id}`;
         transaction.status = "CREATED";
-        transaction.qrCodeUrl = response.data.qr_code_url;
-        transaction.checkoutUrl = response.data.checkout_url;
+        transaction.qrCodeUrl = qrCodeUrl;
         await transaction.save();
 
         req.io.emit("transactionUpdate", {
             transactionId: transaction_id,
             status: "CREATED",
-            qrCodeUrl: response.data.qr_code_url,
-            checkoutUrl: response.data.checkout_url,
+            qrCodeUrl: qrCodeUrl,
         });
 
         res.json({
             success: true,
             transactionId: transaction_id,
-            qrCodeUrl: response.data.qr_code_url,
-            checkoutUrl: response.data.checkout_url,
+            qrCodeUrl: qrCodeUrl,
         });
     } catch (error) {
-        logger.error(`Lỗi gọi API SePay: ${SEPAY_API_URL}/transactions/create`, {
+        logger.error("Lỗi tạo giao dịch SePay", {
             message: error.message,
-            status: error.response?.status,
-            data: error.response?.data,
         });
 
         transaction.status = "FAILED";
         transaction.errorLogs.push({
             timestamp: new Date(),
-            error: { message: error.message, status: error.response?.status },
+            error: { message: error.message },
         });
         await transaction.save();
 
@@ -94,14 +51,7 @@ exports.createTransaction = async (req, res) => {
             error: error.message,
         });
 
-        let errorMessage = `Không thể kết nối SePay: ${error.message}`;
-        if (error.code === "ENOTFOUND") {
-            errorMessage = "Không thể kết nối đến máy chủ SePay. Vui lòng kiểm tra URL API.";
-        } else if (error.response?.status === 401) {
-            errorMessage = "Lỗi xác thực với SePay. Vui lòng kiểm tra API Key.";
-        }
-
-        res.status(500).json({ success: false, error: errorMessage });
+        res.status(500).json({ success: false, error: `Không thể tạo giao dịch: ${error.message}` });
     }
 };
 
