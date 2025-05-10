@@ -1,15 +1,17 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const Queue = require("bull");
 const logger = require("../logger");
-require("dotenv").config(); // Đảm bảo load .env
+require("dotenv").config();
+
+// Import model Transaction
+const Transaction = require("../models/transaction");
 
 const router = express.Router();
 
 // Middleware CORS và log chi tiết cho /webhook
 router.use("/webhook", (req, res, next) => {
     logger.info(`[WEBHOOK] Middleware triggered for ${req.method} ${req.url}, origin: ${req.headers.origin}, headers: ${JSON.stringify(req.headers)}`);
-    res.header("Access-Control-Allow-Origin", "*"); // Tạm thời cho phép tất cả để debug
+    res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-SEPay-Signature");
     if (req.method === "OPTIONS") {
@@ -18,20 +20,6 @@ router.use("/webhook", (req, res, next) => {
     }
     next();
 });
-
-// Định nghĩa schema Transaction
-const transactionSchema = new mongoose.Schema({
-    transactionId: String,
-    status: String,
-    amount: Number,
-    qrCodeUrl: String,
-    checkoutUrl: String,
-    createdAt: { type: Date, default: Date.now },
-    metadata: { type: Object, default: {} }, // Khởi tạo mặc định là {}
-    errorLogs: [Object],
-});
-
-const Transaction = mongoose.model("Transaction", transactionSchema);
 
 const emailQueue = new Queue("emailQueue");
 
@@ -49,7 +37,7 @@ router.post("/create-transaction", async (req, res) => {
         });
         await transaction.save();
 
-        let accountNumber = "0326829327"; // Số tài khoản của Trần Công Tình
+        let accountNumber = "0326829327";
         if (bank_account) {
             if (typeof bank_account === "object" && bank_account !== null) {
                 accountNumber = bank_account.account || bank_account.number || bank_account.id || bank_account.value || "0326829327";
@@ -143,11 +131,7 @@ router.get("/transaction/:transactionId", async (req, res) => {
 router.post("/webhook", async (req, res) => {
     logger.info(`[WEBHOOK] Processing webhook for ${req.url}, body: ${JSON.stringify(req.body)}, headers: ${JSON.stringify(req.headers)}`);
 
-    const {
-        id: sepayId,
-        transferAmount: amount,
-        transferType,
-    } = req.body;
+    const { id: sepayId, transferAmount: amount, transferType } = req.body;
 
     try {
         if (!sepayId || !transferType) {
@@ -158,9 +142,8 @@ router.post("/webhook", async (req, res) => {
         const status = transferType === "in" ? "SUCCESS" : "PENDING";
 
         logger.info(`[WEBHOOK] Attempting to update transaction with SEPay ID ${sepayId} to status ${status} and amount ${amount}`);
-        // Tìm transaction dựa trên metadata hoặc transactionId gốc
         const transaction = await Transaction.findOneAndUpdate(
-            { "metadata.referenceCode": req.body.referenceCode || sepayId }, // Sử dụng referenceCode hoặc sepayId để tìm
+            { "metadata.referenceCode": req.body.referenceCode || sepayId },
             { status, amount },
             { new: true, upsert: true }
         );

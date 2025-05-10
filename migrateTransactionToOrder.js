@@ -2,19 +2,15 @@ const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const logger = require("./logger");
 
-connectDB();
-
-const Transaction = mongoose.model(
-    "Transaction",
-    new mongoose.Schema({}, { strict: false }),
-    "transactions"
-);
-
+// Import models
+const Transaction = require("./models/transaction");
 const Order = mongoose.model(
     "Order",
     new mongoose.Schema({}, { strict: false }),
     "orders"
 );
+
+connectDB();
 
 const migrateTransactionToOrder = async () => {
     try {
@@ -36,12 +32,12 @@ const migrateTransactionToOrder = async () => {
 
         // Tạo order mới
         const orderCount = await Order.countDocuments();
-        const orderId = `ORD-${String(orderCount + 1).padStart(3, "0")}`; // Tạo mã đơn hàng: ORD-005, ...
+        const orderId = `ORD-${String(orderCount + 1).padStart(3, "0")}`;
 
         const metadata = transaction.metadata || {};
         const items = metadata.items || [];
         const formattedItems = items.map((item) => ({
-            product_id: item.name, // Không có product_id, tạm dùng name
+            product_id: item.name,
             product_name: item.name,
             quantity: item.quantity,
             product_price: item.price,
@@ -50,11 +46,11 @@ const migrateTransactionToOrder = async () => {
         const order = new Order({
             id: orderId,
             transactionId: "THT1746861191435",
-            user_id: "unknown", // Không có user_id trong transaction, để mặc định
+            user_id: "unknown",
             email: metadata.customerEmail || "default@example.com",
             user_fullName: "Unknown User",
-            user_phone: "0326829327", // Số điện thoại từ webhook
-            name: "Unknown Receiver", // Không có thông tin người nhận
+            user_phone: "0326829327",
+            name: "Unknown Receiver",
             phone: "0326829327",
             status: "processing",
             total_amount: transaction.amount || 30001,

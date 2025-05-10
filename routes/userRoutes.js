@@ -1,17 +1,13 @@
 const express = require("express");
 const { getUserProfile, updateUserProfile, changePassword, getAllUsers, getAllOrders, createProduct, updateProduct, getAllOrdersById } = require("../controllers/userController");
-const mongoose = require("mongoose");
 const logger = require("../logger");
+
+// Import model Transaction
+const Transaction = require("../models/transaction");
 
 const router = express.Router();
 
 const { protect } = require("../middleware/authMiddleware");
-
-const Transaction = mongoose.model(
-    "Transaction",
-    new mongoose.Schema({}, { strict: false }),
-    "transactions"
-);
 
 router.get("/profile", protect, getUserProfile);
 router.put("/profile", protect, updateUserProfile);
@@ -22,7 +18,7 @@ router.post("/product", protect, createProduct);
 router.put("/updateProduct/:id", protect, updateProduct);
 router.get("/myorders/:email", protect, getAllOrdersById);
 
-// Thêm endpoint để lấy danh sách transactions
+// Endpoint để lấy danh sách transactions
 router.get("/mytransactions/:email", protect, async (req, res) => {
     const { email } = req.params;
 
