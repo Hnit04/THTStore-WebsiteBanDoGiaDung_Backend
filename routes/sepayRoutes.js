@@ -2,23 +2,37 @@ const express = require("express");
 const mongoose = require("mongoose");
 const Queue = require("bull");
 const logger = require("../logger");
+require("dotenv").config(); // Đảm bảo load .env
 
 const router = express.Router();
 
-// Middleware CORS cụ thể cho /webhook
+// Middleware CORS và log chi tiết cho /webhook
 router.use("/webhook", (req, res, next) => {
-    logger.info(`Webhook middleware triggered for ${req.method} ${req.url}, origin: ${req.headers.origin}, headers: ${JSON.stringify(req.headers)}`);
+    logger.info(`[WEBHOOK] Middleware triggered for ${req.method} ${req.url}, origin: ${req.headers.origin}, headers: ${JSON.stringify(req.headers)}`);
     res.header("Access-Control-Allow-Origin", "*"); // Tạm thời cho phép tất cả để debug
     res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-SEPay-Signature");
     if (req.method === "OPTIONS") {
-        logger.info(`Responding to OPTIONS preflight for ${req.url}`);
+        logger.info(`[WEBHOOK] Responding to OPTIONS preflight for ${req.url}`);
         return res.status(200).end();
     }
     next();
 });
 
-// Định nghĩa schema Transaction trực tiếp trong file này
+// Kiểm tra API Key (nếu SEPay cung cấp header xác thực)
+const checkApiKey = (req, res, next) => {
+    const sepayApiKey = process.env.SEPAY_API_KEY;
+    const authHeader = req.headers["x-sepay-signature"] || req.headers["authorization"];
+
+    logger.info(`[WEBHOOK] Checking API Key, received: ${authHeader}, expected: ${sepayApiKey}`);
+    if (!authHeader || authHeader !== sepayApiKey) {
+        logger.warn("[WEBHOOK] Invalid or missing API Key");
+        return res.status(401).json({ success: false, error: "Unauthorized: Invalid API Key" });
+    }
+    next();
+};
+
+// Định nghĩa schema Transaction
 const transactionSchema = new mongoose.Schema({
     transactionId: String,
     status: String,
@@ -36,7 +50,7 @@ const emailQueue = new Queue("emailQueue");
 
 // Tạo giao dịch mới
 router.post("/create-transaction", async (req, res) => {
-    logger.info(`Received create-transaction request for ${req.url}, body: ${JSON.stringify(req.body)}`);
+    logger.info(`[CREATE] Received create-transaction request for ${req.url}, body: ${JSON.stringify(req.body)}`);
     const { transaction_id, amount, description, items, bank_account, customerEmail } = req.body;
 
     const transaction = new Transaction({
@@ -52,22 +66,21 @@ router.post("/create-transaction", async (req, res) => {
         if (bank_account) {
             if (typeof bank_account === "object" && bank_account !== null) {
                 accountNumber = bank_account.account || bank_account.number || bank_account.id || bank_account.value || "0326829327";
-                logger.info(`Converted bank_account object to: ${accountNumber}`);
+                logger.info(`[CREATE] Converted bank_account object to: ${accountNumber}`);
             } else if (typeof bank_account === "string") {
                 accountNumber = bank_account;
             } else {
-                logger.warn("Invalid bank_account format, using default", { bank_account });
+                logger.warn("[CREATE] Invalid bank_account format, using default", { bank_account });
             }
         }
 
         const qrCodeUrl = `https://qr.sepay.vn/img?acc=${accountNumber}&bank=MBBank&amount=${amount}&des=${transaction_id}`;
-        logger.info(`Generated QR Code URL: ${qrCodeUrl}`);
+        logger.info(`[CREATE] Generated QR Code URL: ${qrCodeUrl}`);
 
         transaction.status = "CREATED";
         transaction.qrCodeUrl = qrCodeUrl;
         await transaction.save();
 
-        // Emit sự kiện qua socket
         req.io = req.app.get("socketio");
         if (req.io) {
             req.io.emit("transactionUpdate", {
@@ -76,7 +89,7 @@ router.post("/create-transaction", async (req, res) => {
                 qrCodeUrl: qrCodeUrl,
             });
         } else {
-            logger.warn("Socket.IO instance not found in app");
+            logger.warn("[CREATE] Socket.IO instance not found in app");
         }
 
         res.json({
@@ -85,7 +98,7 @@ router.post("/create-transaction", async (req, res) => {
             qrCodeUrl: qrCodeUrl,
         });
     } catch (error) {
-        logger.error("Lỗi tạo giao dịch SePay", {
+        logger.error("[CREATE] Lỗi tạo giao dịch SePay", {
             message: error.message,
             bank_account: bank_account,
         });
@@ -105,7 +118,7 @@ router.post("/create-transaction", async (req, res) => {
                 error: error.message,
             });
         } else {
-            logger.warn("Socket.IO instance not found in app");
+            logger.warn("[CREATE] Socket.IO instance not found in app");
         }
 
         res.status(500).json({
@@ -120,11 +133,11 @@ router.post("/create-transaction", async (req, res) => {
 router.get("/transaction/:transactionId", async (req, res) => {
     const { transactionId } = req.params;
 
-    logger.info(`Checking transaction status for ID: ${transactionId}`);
+    logger.info(`[CHECK] Checking transaction status for ID: ${transactionId}`);
     try {
         const transaction = await Transaction.findOne({ transactionId });
         if (!transaction) {
-            logger.warn(`Transaction not found: ${transactionId}`);
+            logger.warn(`[CHECK] Transaction not found: ${transactionId}`);
             return res.status(404).json({ success: false, error: "Không tìm thấy giao dịch" });
         }
 
@@ -138,19 +151,19 @@ router.get("/transaction/:transactionId", async (req, res) => {
             },
         });
     } catch (error) {
-        logger.error("Lỗi kiểm tra trạng thái giao dịch", { error: error.message });
+        logger.error("[CHECK] Lỗi kiểm tra trạng thái giao dịch", { error: error.message });
         res.status(500).json({ success: false, error: "Lỗi kiểm tra trạng thái giao dịch" });
     }
 });
 
 // Webhook nhận thông báo từ SEPay
-router.post("/webhook", async (req, res) => {
-    logger.info(`Processing webhook for ${req.url}, body: ${JSON.stringify(req.body)}, headers: ${JSON.stringify(req.headers)}`);
+router.post("/webhook", checkApiKey, async (req, res) => {
+    logger.info(`[WEBHOOK] Processing webhook for ${req.url}, body: ${JSON.stringify(req.body)}, headers: ${JSON.stringify(req.headers)}`);
     const { transaction_id, status, amount } = req.body;
 
     try {
         if (!transaction_id || !status) {
-            logger.warn("Invalid webhook payload", { body: req.body });
+            logger.warn("[WEBHOOK] Invalid webhook payload", { body: req.body });
             return res.status(400).json({ success: false, error: "Dữ liệu webhook không hợp lệ" });
         }
 
@@ -161,18 +174,17 @@ router.post("/webhook", async (req, res) => {
         );
 
         if (!transaction) {
-            logger.warn("Transaction not found for update", { transaction_id });
+            logger.warn("[WEBHOOK] Transaction not found for update", { transaction_id });
             return res.status(404).json({ success: false, error: "Không tìm thấy giao dịch" });
         }
 
-        logger.info(`Updated transaction status to ${status} for ${transaction_id}`);
+        logger.info(`[WEBHOOK] Updated transaction status to ${status} for ${transaction_id}`);
 
-        // Emit sự kiện qua socket
         req.io = req.app.get("socketio");
         if (req.io) {
             req.io.emit("transactionUpdate", { transactionId: transaction_id, status });
         } else {
-            logger.warn("Socket.IO instance not found in app");
+            logger.warn("[WEBHOOK] Socket.IO instance not found in app");
         }
 
         if (status === "SUCCESS") {
@@ -189,12 +201,12 @@ router.post("/webhook", async (req, res) => {
             };
 
             await emailQueue.add(mailOptions);
-            logger.info(`Email xác nhận được xếp hàng cho giao dịch ${transaction_id}`);
+            logger.info(`[WEBHOOK] Email xác nhận được xếp hàng cho giao dịch ${transaction_id}`);
         }
 
         res.status(200).json({ success: true, message: "Webhook nhận và xử lý thành công" });
     } catch (error) {
-        logger.error("Lỗi xử lý webhook", { error: error.message, body: req.body });
+        logger.error("[WEBHOOK] Lỗi xử lý webhook", { error: error.message, body: req.body });
         res.status(500).json({ success: false, error: error.message });
     }
 });

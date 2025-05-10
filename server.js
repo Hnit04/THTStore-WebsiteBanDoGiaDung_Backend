@@ -41,7 +41,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: corsOptions });
 
-// Lưu socket instance vào app để sử dụng trong các route
+// Lưu socket instance vào app
 app.set("socketio", io);
 
 app.use(cors(corsOptions));
@@ -54,8 +54,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Sử dụng các route
-app.use("/api/sepay", require("./routes/sepayRoutes")); // Di chuyển lên đầu để tránh xung đột
+// Sử dụng các route (ưu tiên /api/sepay)
+app.use("/api/sepay", require("./routes/sepayRoutes")); // Đặt lên đầu để ưu tiên
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/products", require("./routes/productRoutes"));
 app.use("/api/categories", require("./routes/categoryRoutes"));
