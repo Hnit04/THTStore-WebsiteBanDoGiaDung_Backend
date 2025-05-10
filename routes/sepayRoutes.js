@@ -68,17 +68,16 @@ router.post("/create-transaction", async (req, res) => {
         transaction.qrCodeUrl = qrCodeUrl;
         await transaction.save();
 
-        // Tạm thời bỏ Socket.IO để debug
-        // req.io = req.app.get("socketio");
-        // if (req.io) {
-        //   req.io.emit("transactionUpdate", {
-        //     transactionId: transaction_id,
-        //     status: "CREATED",
-        //     qrCodeUrl: qrCodeUrl,
-        //   });
-        // } else {
-        //   logger.warn("[CREATE] Socket.IO instance not found in app");
-        // }
+        req.io = req.app.get("socketio");
+        if (req.io) {
+            req.io.emit("transactionUpdate", {
+                transactionId: transaction_id,
+                status: "CREATED",
+                qrCodeUrl: qrCodeUrl,
+            });
+        } else {
+            logger.warn("[CREATE] Socket.IO instance not found in app");
+        }
 
         res.json({
             success: true,
@@ -171,36 +170,12 @@ router.post("/webhook", async (req, res) => {
 
         logger.info(`[WEBHOOK] Updated transaction status to ${status} for ${transaction_id}`);
 
-        // Tạm thời bỏ Socket.IO để debug
-        // req.io = req.app.get("socketio");
-        // if (req.io) {
-        //   req.io.emit("transactionUpdate", { transactionId: transaction_id, status });
-        // } else {
-        //   logger.warn("[WEBHOOK] Socket.IO instance not found in app");
-        // }
-
-        // Tạm thời bỏ gửi email để debug
-        // if (status === "SUCCESS") {
-        //   const metadata = transaction.metadata || {};
-        //   const customerEmail = metadata.customerEmail || "default@example.com";
-        //   const itemsList = metadata.items
-        //     ? metadata.items.map((item) => `${item.name} (x${item.quantity}): ${item.price} VND`).join("\n")
-        //     : "Không có thông tin chi tiết sản phẩm";
-
-        //   try {
-        //     const mailOptions = {
-        //       from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
-        //       to: customerEmail,
-        //       subject: "Xác nhận thanh toán thành công - THT Store",
-        //       text: `Chào bạn,\n\nGiao dịch #${transaction_id} đã thành công!\n\nChi tiết:\n${itemsList}\nTổng: ${amount} VND\n\nCảm ơn bạn đã mua sắm tại THT Store.`,
-        //     };
-
-        //     await emailQueue.add(mailOptions);
-        //     logger.info(`[WEBHOOK] Email xác nhận được xếp hàng cho giao dịch ${transaction_id}`);
-        //   } catch (emailError) {
-        //     logger.error("[WEBHOOK] Lỗi gửi email", { error: emailError.message, transaction_id });
-        //   }
-        // }
+        req.io = req.app.get("socketio");
+        if (req.io) {
+            req.io.emit("transactionUpdate", { transactionId: transaction_id, status });
+        } else {
+            logger.warn("[WEBHOOK] Socket.IO instance not found in app");
+        }
 
         res.status(200).json({ success: true, message: "Webhook nhận và xử lý thành công" });
     } catch (error) {
