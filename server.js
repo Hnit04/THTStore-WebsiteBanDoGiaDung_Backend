@@ -54,42 +54,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Middleware CORS cụ thể cho /api/sepay/webhook
-app.use("/api/sepay/webhook", (req, res, next) => {
-  logger.info(`Webhook middleware triggered for ${req.method} ${req.url}, origin: ${req.headers.origin}, headers: ${JSON.stringify(req.headers)}`);
-  res.header("Access-Control-Allow-Origin", "*"); // Tạm thời cho phép tất cả để debug
-  res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (req.method === "OPTIONS") {
-    logger.info(`Responding to OPTIONS preflight for ${req.url}`);
-    return res.status(200).end();
-  }
-  next();
-});
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_EMAIL,
-    pass: process.env.SMTP_PASSWORD,
-  },
-});
-
-const emailQueue = new Queue("emailQueue");
-emailQueue.process(async (job) => {
-  await transporter.sendMail(job.data);
-});
-
 // Sử dụng các route
+app.use("/api/sepay", require("./routes/sepayRoutes")); // Di chuyển lên đầu để tránh xung đột
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/products", require("./routes/productRoutes"));
 app.use("/api/categories", require("./routes/categoryRoutes"));
 app.use("/api/cart", require("./routes/cartRoutes"));
 app.use("/api/orders", require("./routes/orderRoutes"));
 app.use("/api/users", require("./routes/userRoutes"));
-app.use("/api/sepay", require("./routes/sepayRoutes")); // Sử dụng sepayRoutes
 
 app.use((err, req, res, next) => {
   logger.error("Lỗi server", { error: err.stack });

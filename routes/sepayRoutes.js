@@ -5,6 +5,19 @@ const logger = require("../logger");
 
 const router = express.Router();
 
+// Middleware CORS cụ thể cho /webhook
+router.use("/webhook", (req, res, next) => {
+    logger.info(`Webhook middleware triggered for ${req.method} ${req.url}, origin: ${req.headers.origin}, headers: ${JSON.stringify(req.headers)}`);
+    res.header("Access-Control-Allow-Origin", "*"); // Tạm thời cho phép tất cả để debug
+    res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+        logger.info(`Responding to OPTIONS preflight for ${req.url}`);
+        return res.status(200).end();
+    }
+    next();
+});
+
 // Định nghĩa schema Transaction trực tiếp trong file này
 const transactionSchema = new mongoose.Schema({
     transactionId: String,
@@ -23,9 +36,8 @@ const emailQueue = new Queue("emailQueue");
 
 // Tạo giao dịch mới
 router.post("/create-transaction", async (req, res) => {
+    logger.info(`Received create-transaction request for ${req.url}, body: ${JSON.stringify(req.body)}`);
     const { transaction_id, amount, description, items, bank_account, customerEmail } = req.body;
-
-    logger.info("Received create-transaction request", { bank_account });
 
     const transaction = new Transaction({
         transactionId: transaction_id,
@@ -56,7 +68,7 @@ router.post("/create-transaction", async (req, res) => {
         await transaction.save();
 
         // Emit sự kiện qua socket
-        req.io = req.app.get("socketio"); // Lấy socket từ app
+        req.io = req.app.get("socketio");
         if (req.io) {
             req.io.emit("transactionUpdate", {
                 transactionId: transaction_id,
