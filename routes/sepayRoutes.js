@@ -19,19 +19,6 @@ router.use("/webhook", (req, res, next) => {
     next();
 });
 
-// Kiểm tra API Key (tạm thời comment để debug)
-// const checkApiKey = (req, res, next) => {
-//   const sepayApiKey = process.env.SEPAY_API_KEY;
-//   const authHeader = req.headers["x-sepay-signature"] || req.headers["authorization"];
-//
-//   logger.info(`[WEBHOOK] Checking API Key, received: ${authHeader}, expected: ${sepayApiKey}`);
-//   if (!authHeader || authHeader !== sepayApiKey) {
-//     logger.warn("[WEBHOOK] Invalid or missing API Key");
-//     return res.status(401).json({ success: false, error: "Unauthorized: Invalid API Key" });
-//   }
-//   next();
-// };
-
 // Định nghĩa schema Transaction
 const transactionSchema = new mongoose.Schema({
     transactionId: String,
@@ -40,7 +27,7 @@ const transactionSchema = new mongoose.Schema({
     qrCodeUrl: String,
     checkoutUrl: String,
     createdAt: { type: Date, default: Date.now },
-    metadata: Object,
+    metadata: { type: Object, default: {} }, // Khởi tạo mặc định là {}
     errorLogs: [Object],
 });
 
@@ -157,7 +144,7 @@ router.get("/transaction/:transactionId", async (req, res) => {
 });
 
 // Webhook nhận thông báo từ SEPay
-router.post("/webhook", /*checkApiKey,*/ async (req, res) => { // Tạm thời bỏ checkApiKey
+router.post("/webhook", async (req, res) => {
     logger.info(`[WEBHOOK] Processing webhook for ${req.url}, body: ${JSON.stringify(req.body)}, headers: ${JSON.stringify(req.headers)}`);
 
     const {
@@ -176,7 +163,7 @@ router.post("/webhook", /*checkApiKey,*/ async (req, res) => { // Tạm thời b
 
         const transaction = await Transaction.findOneAndUpdate(
             { transactionId: transaction_id },
-            { status, amount },
+            { status, amount, metadata: { ...req.body, ...(await Transaction.findOne({ transactionId: transaction_id }))?.metadata || {} } },
             { new: true, upsert: true }
         );
 
@@ -195,9 +182,11 @@ router.post("/webhook", /*checkApiKey,*/ async (req, res) => { // Tạm thời b
         }
 
         if (status === "SUCCESS") {
-            const customerEmail = transaction.metadata.customerEmail || "default@example.com";
-            const itemsList = transaction.metadata.items
-                ? transaction.metadata.items.map((item) => `${item.name} (x${item.quantity}): ${item.price} VND`).join("\n")
+            // Kiểm tra metadata và customerEmail
+            const metadata = transaction.metadata || {};
+            const customerEmail = metadata.customerEmail || "default@example.com";
+            const itemsList = metadata.items
+                ? metadata.items.map((item) => `${item.name} (x${item.quantity}): ${item.price} VND`).join("\n")
                 : "Không có thông tin chi tiết sản phẩm";
 
             const mailOptions = {
