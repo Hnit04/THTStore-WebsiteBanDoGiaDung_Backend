@@ -4,7 +4,6 @@ const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const { Server } = require("socket.io");
 const http = require("http");
-const mongoose = require("mongoose");
 const nodemailer = require("nodemailer");
 const Queue = require("bull");
 const logger = require("./logger");
@@ -42,6 +41,9 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: corsOptions });
 
+// Lưu socket instance vào app để sử dụng trong các route
+app.set("socketio", io);
+
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 app.use(express.json());
@@ -65,18 +67,6 @@ app.use("/api/sepay/webhook", (req, res, next) => {
   next();
 });
 
-const transactionSchema = new mongoose.Schema({
-  transactionId: String,
-  status: String,
-  amount: Number,
-  qrCodeUrl: String,
-  checkoutUrl: String,
-  createdAt: { type: Date, default: Date.now },
-  metadata: Object,
-  errorLogs: [Object],
-});
-const Transaction = mongoose.model("Transaction", transactionSchema);
-
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: process.env.SMTP_PORT,
@@ -99,7 +89,7 @@ app.use("/api/categories", require("./routes/categoryRoutes"));
 app.use("/api/cart", require("./routes/cartRoutes"));
 app.use("/api/orders", require("./routes/orderRoutes"));
 app.use("/api/users", require("./routes/userRoutes"));
-app.use("/api/sepay", require("./routes/sepayRoutes")); // Thêm sepayRoutes
+app.use("/api/sepay", require("./routes/sepayRoutes")); // Sử dụng sepayRoutes
 
 app.use((err, req, res, next) => {
   logger.error("Lỗi server", { error: err.stack });

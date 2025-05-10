@@ -1,9 +1,23 @@
 const express = require("express");
-const Transaction = require("../models/Transaction");
+const mongoose = require("mongoose");
 const Queue = require("bull");
 const logger = require("../logger");
 
 const router = express.Router();
+
+// Định nghĩa schema Transaction trực tiếp trong file này
+const transactionSchema = new mongoose.Schema({
+    transactionId: String,
+    status: String,
+    amount: Number,
+    qrCodeUrl: String,
+    checkoutUrl: String,
+    createdAt: { type: Date, default: Date.now },
+    metadata: Object,
+    errorLogs: [Object],
+});
+
+const Transaction = mongoose.model("Transaction", transactionSchema);
 
 const emailQueue = new Queue("emailQueue");
 
