@@ -18,8 +18,7 @@ exports.createTransaction = async (req, res) => {
     await transaction.save();
 
     try {
-        // Sử dụng số tài khoản mặc định nếu không có hoặc không hợp lệ
-        let accountNumber = "0326829327"; // Số tài khoản của Trần Công Tình
+        let accountNumber = "0326829327"; // Số tài khoản của Trần Công Tính
         if (bank_account) {
             if (typeof bank_account === "object" && bank_account !== null) {
                 accountNumber = bank_account.account || bank_account.number || bank_account.id || bank_account.value || "0326829327";
@@ -31,7 +30,6 @@ exports.createTransaction = async (req, res) => {
             }
         }
 
-        // Tạo QR Code động qua qr.sepay.vn
         const qrCodeUrl = `https://qr.sepay.vn/img?acc=${accountNumber}&bank=MBBank&amount=${amount}&des=${transaction_id}`;
         logger.info(`Generated QR Code URL: ${qrCodeUrl}`);
 
