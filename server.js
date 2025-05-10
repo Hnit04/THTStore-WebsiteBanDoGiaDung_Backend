@@ -24,7 +24,7 @@ logger.info(`Allowed origins: ${JSON.stringify(allowedOrigins)}`);
 
 const corsOptions = {
   origin: (origin, callback) => {
-    logger.info(`Checking origin: ${origin}`);
+    logger.info(`Checking origin for general CORS: ${origin}`);
     if (!origin || allowedOrigins.includes(origin) || origin.includes("sepay.vn")) {
       callback(null, true);
     } else {
@@ -48,6 +48,18 @@ app.use(express.json());
 
 app.use((req, res, next) => {
   logger.info(`Received request: ${req.method} ${req.url} from origin: ${req.headers.origin}`);
+  next();
+});
+
+// Middleware CORS cụ thể cho /api/sepay/webhook
+app.use("/api/sepay/webhook", (req, res, next) => {
+  logger.info(`Webhook request method: ${req.method}, origin: ${req.headers.origin}, headers: ${JSON.stringify(req.headers)}`);
+  res.header("Access-Control-Allow-Origin", "*"); // Cho phép tất cả nguồn gốc tạm thời để debug
+  res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
   next();
 });
 
@@ -99,7 +111,7 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
   await transaction.save();
 
   try {
-    let accountNumber = "0326829327"; // Số tài khoản của Trần Công Tính
+    let accountNumber = "0326829327"; // Số tài khoản của Trần Công Tình
     if (bank_account) {
       if (typeof bank_account === "object" && bank_account !== null) {
         accountNumber = bank_account.account || bank_account.number || bank_account.id || bank_account.value || "0326829327";
