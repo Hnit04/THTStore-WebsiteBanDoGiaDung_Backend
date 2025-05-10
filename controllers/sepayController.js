@@ -74,15 +74,27 @@ exports.createTransaction = async (req, res) => {
 };
 
 exports.handleWebhook = async (req, res) => {
-    logger.info("Nhận webhook từ SePay", { body: req.body });
+    logger.info("Received webhook from SePay", { body: req.body, headers: req.headers });
     const { transaction_id, status, amount } = req.body;
 
     try {
+        if (!transaction_id || !status) {
+            logger.warn("Invalid webhook payload", { body: req.body });
+            return res.status(400).json({ success: false, error: "Dữ liệu webhook không hợp lệ" });
+        }
+
         const transaction = await Transaction.findOneAndUpdate(
             { transactionId: transaction_id },
             { status, amount },
             { new: true, upsert: true }
         );
+
+        if (!transaction) {
+            logger.warn("Transaction not found for update", { transaction_id });
+            return res.status(404).json({ success: false, error: "Không tìm thấy giao dịch" });
+        }
+
+        logger.info(`Updated transaction status to ${status} for ${transaction_id}`);
 
         req.io.emit("transactionUpdate", { transactionId: transaction_id, status });
 
@@ -102,9 +114,9 @@ exports.handleWebhook = async (req, res) => {
             logger.info(`Email xác nhận được xếp hàng cho giao dịch ${transaction_id}`);
         }
 
-        res.status(200).json({ success: true, message: "Webhook nhận thành công" });
+        res.status(200).json({ success: true, message: "Webhook nhận và xử lý thành công" });
     } catch (error) {
-        logger.error("Lỗi xử lý webhook", { error: error.message });
+        logger.error("Lỗi xử lý webhook", { error: error.message, body: req.body });
         res.status(500).json({ success: false, error: error.message });
     }
 };
