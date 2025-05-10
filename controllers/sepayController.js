@@ -4,31 +4,18 @@ const Queue = require("bull");
 const crypto = require("crypto");
 const logger = require("../logger");
 
-const CLIENT_KEY = process.env.SEPAY_CLIENT_KEY;
+const SEPAY_API_KEY = process.env.SEPAY_API_KEY;
 const SEPAY_API_URL = process.env.SEPAY_API_URL;
+const SEPAY_WEBHOOK_SECRET = process.env.SEPAY_WEBHOOK_SECRET;
 
 const emailQueue = new Queue("emailQueue");
-
-const getAccessToken = async () => {
-    try {
-        const response = await axios.post(`${SEPAY_API_URL}/oauth/token`, {
-            client_id: process.env.SEPAY_CLIENT_ID,
-            client_secret: process.env.SEPAY_CLIENT_SECRET,
-            grant_type: "client_credentials",
-        });
-        return response.data.access_token;
-    } catch (error) {
-        logger.error("Lỗi lấy access token OAuth2", { error: error.message });
-        throw error;
-    }
-};
 
 exports.createTransaction = async (req, res) => {
     const { transaction_id, amount, description, items, bank_account, customerEmail } = req.body;
 
-    if (!CLIENT_KEY) {
-        logger.error("Thiếu SEPay Client Key");
-        return res.status(500).json({ success: false, error: "Thiếu SEPay Client Key" });
+    if (!SEPAY_API_KEY) {
+        logger.error("Thiếu SEPay API Key");
+        return res.status(500).json({ success: false, error: "Thiếu SEPay API Key" });
     }
 
     const transaction = new Transaction({
@@ -40,7 +27,7 @@ exports.createTransaction = async (req, res) => {
     await transaction.save();
 
     const payload = {
-        client_key: CLIENT_KEY,
+        client_key: SEPAY_API_KEY,
         transaction_id,
         amount,
         description,
@@ -52,11 +39,9 @@ exports.createTransaction = async (req, res) => {
     };
 
     try {
-        // Uncomment nếu SEPay yêu cầu OAuth2
-        // const accessToken = await getAccessToken();
         const response = await axios.post(`${SEPAY_API_URL}/transactions/create`, payload, {
             headers: {
-                Authorization: `Bearer ${CLIENT_KEY}`, // Thay bằng accessToken nếu dùng OAuth2
+                Authorization: `apikey ${SEPAY_API_KEY}`,
                 "Content-Type": "application/json",
             },
             timeout: 10000,
@@ -115,7 +100,7 @@ exports.createTransaction = async (req, res) => {
         if (error.code === "ENOTFOUND") {
             errorMessage = "Không thể kết nối đến máy chủ SEPay. Vui lòng kiểm tra URL API.";
         } else if (error.response?.status === 401) {
-            errorMessage = "Lỗi xác thực với SEPay. Vui lòng kiểm tra CLIENT_KEY.";
+            errorMessage = "Lỗi xác thực với SEPay. Vui lòng kiểm tra API Key.";
         }
 
         res.status(500).json({ success: false, error: errorMessage });
@@ -124,9 +109,13 @@ exports.createTransaction = async (req, res) => {
 
 exports.handleWebhook = async (req, res) => {
     const signature = req.headers["x-sepay-signature"];
-    const secret = process.env.SEPAY_WEBHOOK_SECRET;
+    if (!SEPAY_WEBHOOK_SECRET) {
+        logger.error("Thiếu SEPay Webhook Secret");
+        return res.status(500).json({ success: false, error: "Thiếu SEPay Webhook Secret" });
+    }
+
     const computedSignature = crypto
-        .createHmac("sha256", secret)
+        .createHmac("sha256", SEPAY_WEBHOOK_SECRET)
         .update(JSON.stringify(req.body))
         .digest("hex");
 
@@ -142,7 +131,7 @@ exports.handleWebhook = async (req, res) => {
         const transaction = await Transaction.findOneAndUpdate(
             { transactionId: transaction_id },
             { status, amount },
-            { new: true, upsert: true },
+            { new: true, upsert: true }
         );
 
         req.io.emit("transactionUpdate", { transactionId: transaction_id, status });
