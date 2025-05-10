@@ -18,7 +18,6 @@ const allowedOrigins = process.env.CLIENT_URL
 if (!allowedOrigins.includes("https://tht-store.vercel.app")) {
   allowedOrigins.push("https://tht-store.vercel.app");
 }
-// Thêm nguồn gốc của SePay
 allowedOrigins.push("https://sepay.vn");
 logger.info(`CLIENT_URL: ${process.env.CLIENT_URL}`);
 logger.info(`Allowed origins: ${JSON.stringify(allowedOrigins)}`);
@@ -33,8 +32,8 @@ const corsOptions = {
       callback(new Error("Not allowed by CORS"));
     }
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"], // Thêm HEAD để hỗ trợ preflight
-  allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept", "X-Signature"],
   credentials: true,
   optionsSuccessStatus: 200,
 };
@@ -52,10 +51,86 @@ app.use((req, res, next) => {
   next();
 });
 
+// Middleware xác thực webhook từ SEPay
+const verifyWebhook = (req, res, next) => {
+  const signature = req.headers["x-signature"];
+  const webhookSecret = process.env.SEPAY_WEBHOOK_SECRET;
+
+  if (!signature) {
+    logger.warn("Webhook missing signature", { headers: req.headers });
+    return res.status(401).json({ success: false, error: "Missing webhook signature" });
+  }
+
+  // Giả sử SEPay gửi một chữ ký đơn giản (cần kiểm tra tài liệu SEPay để biết cách xác thực chính xác)
+  // Đây là ví dụ cơ bản, bạn cần điều chỉnh theo tài liệu của SEPay
+  const expectedSignature = webhookSecret; // Thay bằng logic xác thực thực tế
+  if (signature !== expectedSignature) {
+    logger.warn("Invalid webhook signature", { signature, expectedSignature });
+    return res.status(401).json({ success: false, error: "Invalid webhook signature" });
+  }
+
+  next();
+};
+
 // Middleware xử lý preflight request cho webhook
 app.options("/api/sepay/webhook", cors(corsOptions), (req, res) => {
   logger.info("Handling OPTIONS preflight request for webhook", { method: req.method, headers: req.headers });
   res.status(200).end();
+});
+
+// Route xử lý webhook từ SEPay (không áp dụng protect)
+app.post("/api/sepay/webhook", verifyWebhook, async (req, res) => {
+  logger.info("Received webhook from SePay", {
+    body: req.body,
+    headers: req.headers,
+    method: req.method,
+    url: req.url,
+  });
+
+  try {
+    const { transaction_id, status, amount } = req.body;
+
+    if (!transaction_id || !status) {
+      logger.warn("Invalid webhook payload", { body: req.body });
+      return res.status(400).json({ success: false, error: "Dữ liệu webhook không hợp lệ" });
+    }
+
+    const transaction = await Transaction.findOneAndUpdate(
+        { transactionId: transaction_id },
+        { status, amount },
+        { new: true, upsert: true }
+    );
+
+    if (!transaction) {
+      logger.warn("Transaction not found for update", { transaction_id });
+      return res.status(404).json({ success: false, error: "Không tìm thấy giao dịch" });
+    }
+
+    logger.info(`Updated transaction status to ${status} for ${transaction_id}`);
+
+    io.emit("transactionUpdate", { transactionId: transaction_id, status });
+
+    if (status === "SUCCESS") {
+      const customerEmail = transaction.metadata.customerEmail || "default@example.com";
+      const itemsList = transaction.metadata.items
+          .map((item) => `${item.name} (x${item.quantity}): ${item.price} VND`)
+          .join("\n");
+      const mailOptions = {
+        from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
+        to: customerEmail,
+        subject: "Xác nhận thanh toán thành công - THT Store",
+        text: `Chào bạn,\n\nGiao dịch #${transaction_id} đã thành công!\n\nChi tiết:\n${itemsList}\nTổng: ${amount} VND\n\nCảm ơn bạn đã mua sắm tại THT Store.`,
+      };
+
+      await emailQueue.add(mailOptions);
+      logger.info(`Email xác nhận được xếp hàng cho giao dịch ${transaction_id}`);
+    }
+
+    res.status(200).json({ success: true, message: "Webhook nhận và xử lý thành công" });
+  } catch (error) {
+    logger.error("Lỗi xử lý webhook", { error: error.message, body: req.body });
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 const transactionSchema = new mongoose.Schema({
@@ -106,7 +181,7 @@ app.post("/api/sepay/create-transaction", async (req, res) => {
   await transaction.save();
 
   try {
-    let accountNumber = "0326829327"; // Số tài khoản của Trần Công Tính
+    let accountNumber = "0326829327";
     if (bank_account) {
       if (typeof bank_account === "object" && bank_account !== null) {
         accountNumber = bank_account.account || bank_account.number || bank_account.id || bank_account.value || "0326829327";
@@ -184,60 +259,6 @@ app.get("/api/sepay/transaction/:transactionId", async (req, res) => {
   } catch (error) {
     logger.error("Lỗi kiểm tra trạng thái giao dịch", { error: error.message });
     res.status(500).json({ success: false, error: "Lỗi kiểm tra trạng thái giao dịch" });
-  }
-});
-
-app.post("/api/sepay/webhook", async (req, res) => {
-  logger.info("Received webhook from SePay", {
-    body: req.body,
-    headers: req.headers,
-    method: req.method,
-    url: req.url,
-  });
-
-  try {
-    const { transaction_id, status, amount } = req.body;
-
-    if (!transaction_id || !status) {
-      logger.warn("Invalid webhook payload", { body: req.body });
-      return res.status(400).json({ success: false, error: "Dữ liệu webhook không hợp lệ" });
-    }
-
-    const transaction = await Transaction.findOneAndUpdate(
-        { transactionId: transaction_id },
-        { status, amount },
-        { new: true, upsert: true }
-    );
-
-    if (!transaction) {
-      logger.warn("Transaction not found for update", { transaction_id });
-      return res.status(404).json({ success: false, error: "Không tìm thấy giao dịch" });
-    }
-
-    logger.info(`Updated transaction status to ${status} for ${transaction_id}`);
-
-    io.emit("transactionUpdate", { transactionId: transaction_id, status });
-
-    if (status === "SUCCESS") {
-      const customerEmail = transaction.metadata.customerEmail || "default@example.com";
-      const itemsList = transaction.metadata.items
-          .map((item) => `${item.name} (x${item.quantity}): ${item.price} VND`)
-          .join("\n");
-      const mailOptions = {
-        from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
-        to: customerEmail,
-        subject: "Xác nhận thanh toán thành công - THT Store",
-        text: `Chào bạn,\n\nGiao dịch #${transaction_id} đã thành công!\n\nChi tiết:\n${itemsList}\nTổng: ${amount} VND\n\nCảm ơn bạn đã mua sắm tại THT Store.`,
-      };
-
-      await emailQueue.add(mailOptions);
-      logger.info(`Email xác nhận được xếp hàng cho giao dịch ${transaction_id}`);
-    }
-
-    res.status(200).json({ success: true, message: "Webhook nhận và xử lý thành công" });
-  } catch (error) {
-    logger.error("Lỗi xử lý webhook", { error: error.message, body: req.body });
-    res.status(500).json({ success: false, error: error.message });
   }
 });
 
