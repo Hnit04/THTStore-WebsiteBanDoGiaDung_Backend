@@ -18,7 +18,7 @@ const allowedOrigins = process.env.CLIENT_URL
 if (!allowedOrigins.includes("https://tht-store.vercel.app")) {
   allowedOrigins.push("https://tht-store.vercel.app");
 }
-// Thêm nguồn gốc của SePay (hoặc cho phép tất cả tạm thời để debug)
+// Thêm nguồn gốc của SePay
 allowedOrigins.push("https://sepay.vn");
 logger.info(`CLIENT_URL: ${process.env.CLIENT_URL}`);
 logger.info(`Allowed origins: ${JSON.stringify(allowedOrigins)}`);
@@ -26,15 +26,15 @@ logger.info(`Allowed origins: ${JSON.stringify(allowedOrigins)}`);
 const corsOptions = {
   origin: (origin, callback) => {
     logger.info(`Checking origin: ${origin}`);
-    if (!origin || allowedOrigins.includes(origin) || origin.includes("sepay.vn")) {
+    if (!origin || allowedOrigins.includes(origin) || origin?.includes("sepay.vn")) {
       callback(null, true);
     } else {
       logger.warn(`CORS blocked for origin: ${origin}`);
       callback(new Error("Not allowed by CORS"));
     }
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"], // Thêm HEAD để hỗ trợ preflight
+  allowedHeaders: ["Content-Type", "Authorization", "Accept"],
   credentials: true,
   optionsSuccessStatus: 200,
 };
@@ -50,6 +50,12 @@ app.use(express.json());
 app.use((req, res, next) => {
   logger.info(`Received request: ${req.method} ${req.url} from origin: ${req.headers.origin}`);
   next();
+});
+
+// Middleware xử lý preflight request cho webhook
+app.options("/api/sepay/webhook", cors(corsOptions), (req, res) => {
+  logger.info("Handling OPTIONS preflight request for webhook", { method: req.method, headers: req.headers });
+  res.status(200).end();
 });
 
 const transactionSchema = new mongoose.Schema({
@@ -182,10 +188,16 @@ app.get("/api/sepay/transaction/:transactionId", async (req, res) => {
 });
 
 app.post("/api/sepay/webhook", async (req, res) => {
-  logger.info("Received webhook from SePay", { body: req.body, headers: req.headers });
-  const { transaction_id, status, amount } = req.body;
+  logger.info("Received webhook from SePay", {
+    body: req.body,
+    headers: req.headers,
+    method: req.method,
+    url: req.url,
+  });
 
   try {
+    const { transaction_id, status, amount } = req.body;
+
     if (!transaction_id || !status) {
       logger.warn("Invalid webhook payload", { body: req.body });
       return res.status(400).json({ success: false, error: "Dữ liệu webhook không hợp lệ" });
@@ -211,7 +223,6 @@ app.post("/api/sepay/webhook", async (req, res) => {
       const itemsList = transaction.metadata.items
           .map((item) => `${item.name} (x${item.quantity}): ${item.price} VND`)
           .join("\n");
-
       const mailOptions = {
         from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
         to: customerEmail,
@@ -231,8 +242,8 @@ app.post("/api/sepay/webhook", async (req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  logger.error("Lỗi server", { error: err.stack });
-  res.status(500).json({
+  logger.error("Lỗi server", { error: err.stack, method: req.method, url: req.url });
+  res.status(err.status || 500).json({
     success: false,
     error: err.message || "Lỗi server",
   });
