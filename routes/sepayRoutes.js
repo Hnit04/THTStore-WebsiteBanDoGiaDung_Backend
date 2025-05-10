@@ -143,36 +143,37 @@ router.post("/webhook", async (req, res) => {
     logger.info(`[WEBHOOK] Processing webhook for ${req.url}, body: ${JSON.stringify(req.body)}, headers: ${JSON.stringify(req.headers)}`);
 
     const {
-        id: transaction_id,
+        id: sepayId,
         transferAmount: amount,
         transferType,
     } = req.body;
 
     try {
-        if (!transaction_id || !transferType) {
+        if (!sepayId || !transferType) {
             logger.warn("[WEBHOOK] Invalid webhook payload", { body: req.body });
             return res.status(400).json({ success: false, error: "Dữ liệu webhook không hợp lệ" });
         }
 
         const status = transferType === "in" ? "SUCCESS" : "PENDING";
 
-        logger.info(`[WEBHOOK] Attempting to update transaction ${transaction_id} with status ${status} and amount ${amount}`);
+        logger.info(`[WEBHOOK] Attempting to update transaction with SEPay ID ${sepayId} to status ${status} and amount ${amount}`);
+        // Tìm transaction dựa trên metadata hoặc transactionId gốc
         const transaction = await Transaction.findOneAndUpdate(
-            { transactionId: transaction_id },
-            { status, amount, metadata: { ...req.body, ...(await Transaction.findOne({ transactionId: transaction_id }))?.metadata || {} } },
+            { "metadata.referenceCode": req.body.referenceCode || sepayId }, // Sử dụng referenceCode hoặc sepayId để tìm
+            { status, amount },
             { new: true, upsert: true }
         );
 
         if (!transaction) {
-            logger.warn("[WEBHOOK] Transaction not found for update", { transaction_id });
+            logger.warn("[WEBHOOK] Transaction not found for update", { sepayId });
             return res.status(404).json({ success: false, error: "Không tìm thấy giao dịch" });
         }
 
-        logger.info(`[WEBHOOK] Updated transaction status to ${status} for ${transaction_id}`);
+        logger.info(`[WEBHOOK] Updated transaction status to ${status} for ${transaction.transactionId}`);
 
         req.io = req.app.get("socketio");
         if (req.io) {
-            req.io.emit("transactionUpdate", { transactionId: transaction.transactionId, status }); // Sử dụng transaction.transactionId
+            req.io.emit("transactionUpdate", { transactionId: transaction.transactionId, status });
         } else {
             logger.warn("[WEBHOOK] Socket.IO instance not found in app");
         }
