@@ -172,7 +172,7 @@ router.post("/webhook", async (req, res) => {
 
         req.io = req.app.get("socketio");
         if (req.io) {
-            req.io.emit("transactionUpdate", { transactionId: transaction_id, status });
+            req.io.emit("transactionUpdate", { transactionId: transaction.transactionId, status }); // Sử dụng transaction.transactionId
         } else {
             logger.warn("[WEBHOOK] Socket.IO instance not found in app");
         }
